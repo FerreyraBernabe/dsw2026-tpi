@@ -1,9 +1,11 @@
 ﻿using Dsw2026Tpi.Application.Dtos;
 using Dsw2026Tpi.Application.Interfaces;
+using Dsw2026Tpi.Application.Utils;
 using Dsw2026Tpi.Application.Validation;
 using Dsw2026Tpi.CrossCutting.Exceptions;
 using Dsw2026Tpi.Domain.Entities;
 using Dsw2026Tpi.Domain.Interfaces;
+using System.Data;
 
 namespace Dsw2026Tpi.Application.Services;
 
@@ -26,19 +28,42 @@ public class DoctorService : IDoctorService
     }
 
 
-    public async Task<Pagination<AvailabilityModel.DayScheduleResponse  >> GetAvailabilities(Guid id, int pageSize, int pageIndex)
+    //public async Task<Pagination<AvailabilityModel.DayScheduleResponse>> GetAvailabilities(Guid id, int pageSize, int pageIndex)
+    //{
+    //    var doctor = await _persistence.GetById<Doctor>(id);
+    //    if (doctor == null)
+    //    {
+    //        throw new EntityNotFoundException(nameof(Doctor));
+    //    }
+
+    //    //var slots = await _persistence.Paginate<AvailabilitySlot, DateOnly>(pageSize, pageIndex,
+    //    //                                                           s => s.Availability.DoctorId == id && s.Status == 0 && s.Date >= DateOnly.FromDateTime(DateTime.Now), s => s.Date);
+
+    //    var rules= await _persistence.Paginate<Availability, byte>(pageSize, pageIndex,
+    //                                                               r => r.DoctorId == id, r => r.DayOfWeek);
+    //    return rules.Map(r => new AvailabilityModel.Response(r.DoctorId, new List<AvailabilityModel.DaySchedule>))
+    //}
+
+    public async Task<List<AvailabilityModel.ResponseAvailabilities>> GetAvailabilities(Guid doctorId) 
     {
-        var doctor = await _persistence.GetById<Doctor>(id);
+        var doctor = await _persistence.GetById<Doctor>(doctorId, "AvailabilityRules");
         if (doctor == null)
         {
             throw new EntityNotFoundException(nameof(Doctor));
         }
 
-        var slots = await _persistence.Paginate<AvailabilitySlot, DateOnly>(pageSize, pageIndex,
-                                                                   s => s.Availability.DoctorId == id && s.Status == 0 && s.Date >= DateOnly.FromDateTime(DateTime.Now), s => s.Date);
-        return slots.Map(s => new AvailabilityModel.DayScheduleResponse(s.Id, s.Date.ToString("dd/MM/yyyy"), s.StartTime, s.EndTime));
+        var rules = doctor.AvailabilityRules.Select(r => new AvailabilityModel.ResponseAvailabilities(r.Id, r.DayOfWeek.ToString(), r.StartTime, r.EndTime));
+        return rules.ToList();
     }
-
+    //TODO: este método es nuevo y tiene más sentido que use la paginación
+    public async Task<AvailabilityModel.ResponseSlots> GetSlots(Guid id, string day) 
+    {
+        var doctor = await _persistence.GetById<Doctor>(id, "AvailabilityRules", "AvailabilityRules.Slots");
+        var rule = doctor.AvailabilityRules.FirstOrDefault(rule => rule.DayOfWeek == (byte)day.toDayOfWeek());
+        var slots = rule.Slots.Select(s => new AvailabilityModel.Slots(s.Id, s.Date.ToString("dd/MM/yyyy"), s.StartTime, s.EndTime));
+        //TODO: añadir verificaciones básicas de que el doctor y la regla existen, y que la regla tiene slots
+        return new AvailabilityModel.ResponseSlots(rule.Id, day, slots.ToList());
+    }
     public async Task<DoctorModel.Response> CreateDoctor(DoctorModel.Request request)
     {
         DoctorValidator.Validate(request);

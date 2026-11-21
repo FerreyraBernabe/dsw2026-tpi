@@ -77,10 +77,10 @@ public class AvailabilityService : IAvailabilityService
         {
             throw new EntityNotFoundException(request.DoctorId.ToString());
         }
-        if (doctor.AvailabilityRules.Count() > 0)
-        {
-            throw new ConflictException(nameof(ErrorCodes.AVAILABILITY_CONFLICT), ErrorCodes.AVAILABILITY_CONFLICT);
-        }
+        //if (doctor.AvailabilityRules.Count() > 0 )
+        //{
+        //    throw new ConflictException(nameof(ErrorCodes.AVAILABILITY_CONFLICT), ErrorCodes.AVAILABILITY_CONFLICT);
+        //}
         var actualDate = DateOnly.FromDateTime(DateTime.Now);
 
         var numOfDays = DateTime.DaysInMonth(actualDate.Year, actualDate.Month);

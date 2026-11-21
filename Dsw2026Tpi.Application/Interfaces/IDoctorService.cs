@@ -10,5 +10,7 @@ public interface IDoctorService
     Task<DoctorModel.Response> UpdateDoctor(Guid id, DoctorModel.Request request);
     Task DeleteDoctor(Guid id);
     Task ReactivateDoctor(Guid id);
-    Task<Pagination<AvailabilityModel.DayScheduleResponse>> GetAvailabilities(Guid id, int pageSize, int pageIndex);
+    //Task<Pagination<AvailabilityModel.DayScheduleResponse>> GetAvailabilities(Guid id, int pageSize, int pageIndex);
+    Task<List<AvailabilityModel.ResponseAvailabilities>> GetAvailabilities(Guid doctorId);
+    Task<AvailabilityModel.ResponseSlots> GetSlots(Guid id, string day);
 }
