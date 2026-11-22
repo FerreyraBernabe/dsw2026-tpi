@@ -30,5 +30,13 @@ namespace Dsw2026Tpi.Domain.Entities
             LicenseNumber = licenseNumber;
             SpecialityId = specialityId;
         }
+
+        public string AvailabilityStatus() 
+        {
+            return AvailabilityRules.Any(a => 
+            a.Slots.Any(s => s.Status == AvailabilitySlotStatus.AVAILABLE)) 
+                ? "Available" : 
+                "Not Available"; //TODO: provisorio, despues lo mejoramos ;
+        }
     }
 }

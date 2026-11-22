@@ -21,10 +21,10 @@ public class DoctorService : IDoctorService
     public async Task<Pagination<DoctorModel.Response>> GetAll(int pageSize, int pageIndex, string? name = null)
     {
         var doctors = await _persistence.Paginate<Doctor, string>(pageSize, pageIndex, d => string.IsNullOrWhiteSpace(name) && !d.Deleted ||
-                                                   d.Name.Contains(name) && !d.Deleted, x => x.Name, nameof(Doctor.Speciality));
+                                                   d.Name.Contains(name) && !d.Deleted, x => x.Name, nameof(Doctor.Speciality),  "AvailabilityRules", "AvailabilityRules.Slots");
 
         return doctors.Map(d => new DoctorModel.Response(d.Id, d.Name, d.LicenseNumber,
-            new DoctorModel.SpecialtyDto(d.Speciality?.Id, d.Speciality?.Name)));
+            new DoctorModel.SpecialtyDto(d.Speciality?.Id, d.Speciality?.Name, d.Speciality?.IsActive ?? false),d.AvailabilityStatus()));
     }
 
 
@@ -103,7 +103,7 @@ public class DoctorService : IDoctorService
         await _persistence.Add(doctor);
 
         return new DoctorModel.Response(doctor.Id, doctor.Name, doctor.LicenseNumber,
-            new DoctorModel.SpecialtyDto(specialty.Id, specialty.Name));
+            new DoctorModel.SpecialtyDto(specialty.Id, specialty.Name, specialty.IsActive), "No definidas");
     }
 
 
@@ -115,7 +115,7 @@ public class DoctorService : IDoctorService
             throw new EntityNotFoundException(nameof(Specialty));
         }
 
-        var doctor = await _persistence.GetById<Doctor>(id);
+        var doctor = await _persistence.GetById<Doctor>(id, "AvailabilityRules", "AvailabilityRules.Slots");
         if (doctor == null)
         {
             throw new EntityNotFoundException(nameof(Doctor));
@@ -125,7 +125,7 @@ public class DoctorService : IDoctorService
         await _persistence.Update(doctor);
 
         return new DoctorModel.Response(doctor.Id, doctor.Name, doctor.LicenseNumber,
-            new DoctorModel.SpecialtyDto(specialty.Id, specialty.Name));
+            new DoctorModel.SpecialtyDto(specialty.Id, specialty.Name, specialty.IsActive), doctor.AvailabilityStatus());
     }
 
     public async Task DeleteDoctor(Guid id)

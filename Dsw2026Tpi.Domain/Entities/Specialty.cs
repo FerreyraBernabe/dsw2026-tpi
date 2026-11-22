@@ -9,7 +9,6 @@ namespace Dsw2026Tpi.Domain.Entities
         public string Name { get; set; }
         public string Description { get; set; }
         public bool IsActive { get; set; } = true;
-        //ICollection<Doctor> Doctors { get; set; } = [];
 
         public Specialty(string name, string description) 
         {

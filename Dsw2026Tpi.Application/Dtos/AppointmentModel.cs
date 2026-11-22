@@ -12,6 +12,8 @@ public record AppointmentModel
         Guid Id,
         Guid DoctorId,
         string DoctorName,
+        string PatientDni,
+        string PatientName,
         string SpecialityName,
         DateOnly Date,
         TimeOnly StartTime,
