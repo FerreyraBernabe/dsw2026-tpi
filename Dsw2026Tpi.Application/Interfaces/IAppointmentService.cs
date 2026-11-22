@@ -9,9 +9,9 @@ namespace Dsw2026Tpi.Application.Interfaces;
 public interface IAppointmentService
 {
     Task<AppointmentModel.Response> CreateAppointment(AppointmentModel.Request request);
-    Task<IEnumerable<AppointmentModel.PatientResponse>> GetPatientAppointmentsAsync(string dni);
+    Task<IEnumerable<AppointmentModel.Response>> GetPatientAppointmentsAsync(long dni);
     Task CancelAppointmentAsync(Guid id);
-    Task<AppointmentModel.ResponseDates> GetAppointmentsByDate(DateOnly date);
+    Task<IEnumerable<AppointmentModel.Response>> GetAppointmentsByDate(DateOnly date);
     Task<Pagination<AppointmentModel.Response>> CombinedSearch(int pageSize, int pageIndex, Guid? specialtyId, Guid? doctorId, string? dni, DateOnly? date);
 
 }

@@ -29,7 +29,7 @@ public class AppointmentController : AppController
 
 
     [HttpGet("patient")]
-    public async Task<IActionResult> GetPatientAppointments([FromQuery] string dni)
+    public async Task<IActionResult> GetPatientAppointments([FromQuery] long dni)
     {
         var result = await _service.GetPatientAppointmentsAsync(dni);
         return Ok(result);

@@ -28,12 +28,12 @@ public class AppointmentService : IAppointmentService
     {
         var doctor = await _persistence.GetById<Doctor>(request.DoctorId, "AvailabilityRules", "AvailabilityRules.Slots", "Speciality");
         var availabilitySlot = await _persistence.First<AvailabilitySlot>(s => s.Id == request.AvailabilitySlotId && s.Availability.DoctorId == request.DoctorId);
-        string patientDni = request.Patient.Dni.ToString();
+        string patientDni = request.Dni.ToString();
         var patient = await _persistence.First<Patient>(p => p.Dni == patientDni);
 
         AppointmentValidator.ValidateCreate(doctor, availabilitySlot, patient, request.Reason);
 
-        var newAppoiment = new Appointment
+        var appointment = new Appointment
         {
             Reason = request.Reason,
             Patient = patient,
@@ -41,37 +41,41 @@ public class AppointmentService : IAppointmentService
             AvailabilitySlot = availabilitySlot,
             AvailabilitySlotId = availabilitySlot.Id,
         };
-        newAppoiment.Book();
+        appointment.Book();
         try
         {
-            await _persistence.Add(newAppoiment);
+            await _persistence.Add(appointment);
         }
         catch (DbUpdateConcurrencyException Cex) 
         {
             throw new ConflictException(nameof(ErrorCodes.APPOINTMENT_CONFLICT), ErrorCodes.APPOINTMENT_CONFLICT);
         }
         
-        return new AppointmentModel.Response(newAppoiment.Id, newAppoiment.Status.ToString(), availabilitySlot.Date,
-            new AppointmentModel.PatientDto(patient.Dni, patient.Name),
-            new AppointmentModel.DoctorDto(doctor.Id, doctor.Name,
-                new AppointmentModel.SpecialtyDto(doctor.Speciality.Id, doctor.Speciality.Name))
-        );
+        return new AppointmentModel.Response(
+            appointment.Id, 
+            appointment.AvailabilitySlot.DoctorId,
+            appointment.AvailabilitySlot.Availability.Doctor.Name,
+            appointment.AvailabilitySlot.Availability.Doctor.Speciality.Name,
+            appointment.AvailabilitySlot.Date,
+            appointment.AvailabilitySlot.StartTime,
+            appointment.Reason,
+            appointment.Status.ToString());
     }
-    public async Task<IEnumerable<AppointmentModel.PatientResponse>> GetPatientAppointmentsAsync(string dni)
+    public async Task<IEnumerable<AppointmentModel.Response>> GetPatientAppointmentsAsync(long dni)
     {
-        var patient = await _persistence.First<Patient>(p => p.Dni.Equals(dni));
+        var patient = await _persistence.First<Patient>(p => p.Dni == dni.ToString());
         if (patient == null)
         {
-            throw new EntityNotFoundException(dni);
+            throw new EntityNotFoundException(dni.ToString() );
         }
 
-        List<AppointmentModel.PatientResponse> result = [];
+        List<AppointmentModel.Response> result = [];
         var appointments = await _persistence.GetFiltered<Appointment>((a => a.PatientId == patient.Id && a.Status == AppointmentStatus.BOOKED),
             "Patient", "AvailabilitySlot", "AvailabilitySlot.Availability", "AvailabilitySlot.Availability.Doctor", "AvailabilitySlot.Availability.Doctor.Speciality");
 
         foreach (var a in appointments)
         {
-            result.Add(new AppointmentModel.PatientResponse
+            result.Add(new AppointmentModel.Response
             (a.Id, 
             a.AvailabilitySlot.DoctorId,
             a.AvailabilitySlot.Availability.Doctor.Name,
@@ -95,19 +99,25 @@ public class AppointmentService : IAppointmentService
         await _persistence.Update<Appointment>(appointment);
     }
 
-    public async Task<AppointmentModel.ResponseDates> GetAppointmentsByDate (DateOnly date)
+    public async Task<IEnumerable<AppointmentModel.Response>> GetAppointmentsByDate (DateOnly date)
     {
         var appointments = await _persistence.GetFiltered<Appointment>(a => a.AvailabilitySlot.Date == date, "Patient", "AvailabilitySlot"
             , "AvailabilitySlot.Availability", "AvailabilitySlot.Availability.Doctor", "AvailabilitySlot.Availability.Doctor.Speciality");
         var response = new List<AppointmentModel.Response>();
         foreach (var a in appointments)
         {
-            response.Add(new AppointmentModel.Response(a.Id, a.Status.ToString(), a.AvailabilitySlot.Date,
-                    new AppointmentModel.PatientDto(a.Patient.Dni, a.Patient.Name),
-                    new AppointmentModel.DoctorDto(a.AvailabilitySlot.DoctorId, a.AvailabilitySlot.Availability.Doctor.Name,
-                    new AppointmentModel.SpecialtyDto(a.AvailabilitySlot.Availability.Doctor.SpecialityId, a.AvailabilitySlot.Availability.Doctor.Speciality.Name))));
+            response.Add(new AppointmentModel.Response
+            (a.Id,
+            a.AvailabilitySlot.DoctorId,
+            a.AvailabilitySlot.Availability.Doctor.Name,
+            a.AvailabilitySlot.Availability.Doctor.Speciality.Name,
+            a.AvailabilitySlot.Date,
+            a.AvailabilitySlot.StartTime,
+            a.Reason,
+            a.Status.ToString()
+            ));
         }
-        return new AppointmentModel.ResponseDates(response);
+        return response;
     }
 
     // búsqueda combinada de turnos
@@ -125,10 +135,15 @@ public class AppointmentService : IAppointmentService
             r => r.Patient.Dni, "Patient", "AvailabilitySlot.Availability.Doctor", "AvailabilitySlot.Availability.Doctor.Speciality"
         );
 
-        return response.Map(r => new AppointmentModel.Response(r.Id, r.Status.ToString(), r.AvailabilitySlot.Date,
-            new AppointmentModel.PatientDto(r.Patient.Dni, r.Patient.Name),
-            new AppointmentModel.DoctorDto(r.AvailabilitySlot.DoctorId, r.AvailabilitySlot.Availability.Doctor.Name,
-                new AppointmentModel.SpecialtyDto(r.AvailabilitySlot.Availability.Doctor.SpecialityId, r.AvailabilitySlot.Availability.Doctor.Speciality.Name)))
-        );
+        return response.Map(a => new AppointmentModel.Response
+            (a.Id,
+            a.AvailabilitySlot.DoctorId,
+            a.AvailabilitySlot.Availability.Doctor.Name,
+            a.AvailabilitySlot.Availability.Doctor.Speciality.Name,
+            a.AvailabilitySlot.Date,
+            a.AvailabilitySlot.StartTime,
+            a.Reason,
+            a.Status.ToString()
+            ));
     }
 }
