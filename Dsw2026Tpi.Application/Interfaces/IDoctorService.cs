@@ -12,5 +12,5 @@ public interface IDoctorService
     Task ReactivateDoctor(Guid id);
     //Task<Pagination<AvailabilityModel.DayScheduleResponse>> GetAvailabilities(Guid id, int pageSize, int pageIndex);
     Task<List<AvailabilityModel.ResponseAvailabilities>> GetAvailabilities(Guid doctorId);
-    Task<AvailabilityModel.ResponseSlots> GetSlots(Guid id, string day);
+    Task<List<AvailabilityModel.ResponseSlots>> GetSlots(Guid id, string? day = null);
 }

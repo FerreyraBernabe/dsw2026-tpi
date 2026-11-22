@@ -36,7 +36,7 @@ public class DoctorController : AppController
     //    return Ok(availabilities);
     //}
     [HttpGet("{id}/slots")]
-    public async Task<IActionResult> GetSlots([FromRoute] Guid id, [FromQuery] string day)
+    public async Task<IActionResult> GetSlots([FromRoute] Guid id, [FromQuery] string? day = null)
     {
         var slots = await _service.GetSlots(id, day);
         return Ok(slots);

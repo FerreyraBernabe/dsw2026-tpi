@@ -52,28 +52,54 @@ public class DoctorService : IDoctorService
             throw new EntityNotFoundException(nameof(Doctor));
         }
 
-        var rules = doctor.AvailabilityRules.Select(r => new AvailabilityModel.ResponseAvailabilities(r.Id, r.DayOfWeek.ToString(), r.StartTime, r.EndTime));
+        var rules = doctor.AvailabilityRules.Select(r => new AvailabilityModel.ResponseAvailabilities(r.Id, r.DayOfWeek.ToSpanishDayOfWeek().ToString(), r.StartTime, r.EndTime));
         return rules.ToList();
     }
     //TODO: este método es nuevo y tiene más sentido que use la paginación
-    public async Task<AvailabilityModel.ResponseSlots> GetSlots(Guid id, string day) 
+    public async Task<List<AvailabilityModel.ResponseSlots>> GetSlots(Guid id, string? day = null) 
     {
         var doctor = await _persistence.GetById<Doctor>(id, "AvailabilityRules", "AvailabilityRules.Slots");
-        var rule = doctor.AvailabilityRules.FirstOrDefault(rule => rule.DayOfWeek == (byte)day.toDayOfWeek());
-        var slots = rule.Slots.Select(s => new AvailabilityModel.Slots(s.Id, s.Date.ToString("dd/MM/yyyy"), s.StartTime, s.EndTime));
-        //TODO: añadir verificaciones básicas de que el doctor y la regla existen, y que la regla tiene slots
-        return new AvailabilityModel.ResponseSlots(rule.Id, day, slots.ToList());
+        if (doctor is null) 
+        {
+            throw new EntityNotFoundException(nameof(Doctor));
+        }
+        var rules = doctor.AvailabilityRules.AsEnumerable();
+        if (rules is null) 
+        {
+            return new List<AvailabilityModel.ResponseSlots> 
+            { new AvailabilityModel.ResponseSlots(id, day, []) };
+        }
+        var today = DateOnly.FromDateTime(DateTime.Now);    
+        if (!string.IsNullOrWhiteSpace(day)) 
+        {
+            var targetDay = (byte)day.toDayOfWeek();
+            rules = rules.Where(rule => rule.DayOfWeek == targetDay);
+        }
+
+        return rules.Select(rule => new AvailabilityModel.ResponseSlots(
+            doctor.Id,
+            rule.DayOfWeek.ToSpanishDayOfWeek(),
+            rule.Slots.Where(s => s.Status == AvailabilitySlotStatus.AVAILABLE && s.Date >= today)
+            .OrderBy(s => s.Date)
+            .ThenBy(s => s.StartTime)
+            .Select(s => new AvailabilityModel.Slots(
+                s.Id,
+                s.Date.ToString("dd/MM/yyyy"),
+                s.StartTime, 
+                s.EndTime))
+            .ToList()))
+            .ToList();
     }
     public async Task<DoctorModel.Response> CreateDoctor(DoctorModel.Request request)
     {
         DoctorValidator.Validate(request);
-        var specialty = await _persistence.GetById<Specialty>(request.SpecialityId);
+        var specialty = await _persistence.GetById<Specialty>(request.SpecialtyId);
         if(specialty == null)
         {
             throw new EntityNotFoundException(nameof(Specialty));
         }
 
-        var doctor = new Doctor(request.Name, request.LicenseNumber, request.SpecialityId);
+        var doctor = new Doctor(request.Name, request.LicenseNumber, request.SpecialtyId);
         await _persistence.Add(doctor);
 
         return new DoctorModel.Response(doctor.Id, doctor.Name, doctor.LicenseNumber,
@@ -83,7 +109,7 @@ public class DoctorService : IDoctorService
 
     public async Task<DoctorModel.Response> UpdateDoctor(Guid id, DoctorModel.Request request)
     {
-        var specialty = await _persistence.GetById<Specialty>(request.SpecialityId);
+        var specialty = await _persistence.GetById<Specialty>(request.SpecialtyId);
         if (specialty == null)
         {
             throw new EntityNotFoundException(nameof(Specialty));
@@ -95,7 +121,7 @@ public class DoctorService : IDoctorService
             throw new EntityNotFoundException(nameof(Doctor));
         }
         DoctorValidator.Validate(request);
-        doctor.Update(request.Name, request.LicenseNumber, request.SpecialityId);
+        doctor.Update(request.Name, request.LicenseNumber, request.SpecialtyId);
         await _persistence.Update(doctor);
 
         return new DoctorModel.Response(doctor.Id, doctor.Name, doctor.LicenseNumber,
