@@ -52,11 +52,11 @@ public class Program
                 } 
             }
             app.UseRouting();
-            app.UseRateLimiter();
+            app.UseCors();
+            app.UseMiddleware<ExceptionHandlingMiddleware>();
             app.UseAuthentication();
             app.UseAuthorization();
-            app.UseMiddleware<ExceptionHandlingMiddleware>();
-            app.UseCors();
+            app.UseRateLimiter();
            
 
             app.MapControllers();
