@@ -130,6 +130,7 @@ public class AvailabilityService : IAvailabilityService
         }
         var actualDate = DateOnly.FromDateTime(DateTime.Now);
         var numOfDays = DateTime.DaysInMonth(actualDate.Year, actualDate.Month);
+
         foreach (var rule in availabilities) 
         {
             foreach (var daySchedule in request.Days)
@@ -138,23 +139,26 @@ public class AvailabilityService : IAvailabilityService
                 {
                     throw new ArgumentOutOfRangeException("El horario de inicio debe ser 30 minutos menor al horario de fin.");
                 }
-                var dayOfWeek = daySchedule.Day.toDayOfWeek();
-                if (rule.DayOfWeek == (byte)dayOfWeek)
+                
+                var dayOfWeek = (byte)daySchedule.Day.toDayOfWeek();
+                if (!availabilities.Any(a => a.DayOfWeek == dayOfWeek))
                 {
-                    //if (rule.Slots.Any(s => s.Status != AvailabilitySlotStatus.AVAILABLE))
-                    //{
-                    //    throw new InvalidOperationException("Existen turnos reservados/bloqueados para la disponiblidad actual. No es posible modificar los horarios asignados");
-                    //} Versión anterior: si tenía turnos ocupados, no permitía modiicar la disponibilidad.
-
+                    CreateAvailabilitiesAsync(new AvailabilityModel.Request(request.DoctorId, [daySchedule])).Wait();
+                }
+                else if(rule.DayOfWeek == dayOfWeek)
+                {
                     UpdateSlots(rule.StartTime, rule.EndTime, daySchedule.StartTime, daySchedule.EndTime,rule.Slots);
                     rule.StartTime = daySchedule.StartTime;
                     rule.EndTime = daySchedule.EndTime;
 
                     var takenSlots = rule.Slots.Where(s => s.Status != AvailabilitySlotStatus.AVAILABLE).ToList();
                     rule.Slots.Clear();
-                    foreach(var slot in GenerateSlots(request.DoctorId, daySchedule.StartTime, daySchedule.EndTime, dayOfWeek, actualDate, numOfDays))
+                    foreach(var slot in GenerateSlots(request.DoctorId, daySchedule.StartTime, daySchedule.EndTime, (DayOfWeek)dayOfWeek, actualDate, numOfDays))
                     {
-                        rule.Slots.Add(slot);
+                        if(!takenSlots.Any(t => t.Date == slot.Date && t.StartTime == slot.StartTime)) 
+                        {
+                            rule.Slots.Add(slot);
+                        }
                     }
                     foreach (var s in takenSlots) 
                     {
