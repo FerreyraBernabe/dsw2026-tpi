@@ -1,10 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace Dsw2026Tpi.Domain.Entities
+﻿namespace Dsw2026Tpi.Domain.Entities
 {
-    public class Doctor: EntityBase
+    public class Doctor : EntityBase
     {
         public string Name { get; set; }
         public string LicenseNumber { get; set; }
@@ -14,7 +10,6 @@ namespace Dsw2026Tpi.Domain.Entities
 
         protected Doctor()
         {
-            
         }
 
         public Doctor(string name, string licenseNumber, Guid specialityId)
@@ -31,12 +26,15 @@ namespace Dsw2026Tpi.Domain.Entities
             SpecialityId = specialityId;
         }
 
-        public string AvailabilityStatus() 
+        public string AvailabilityStatus()
         {
-            return AvailabilityRules.Any(a => 
-            a.Slots.Any(s => s.Status == AvailabilitySlotStatus.AVAILABLE)) 
-                ? "Available" : 
-                "Not Available"; //TODO: provisorio, despues lo mejoramos ;
+            return AvailabilityRules != null &&
+                AvailabilityRules.Any(a =>
+                    !a.Deleted &&
+                    a.Slots != null &&
+                    a.Slots.Any(s => s.Status == AvailabilitySlotStatus.AVAILABLE))
+                ? "Available"
+                : "Not Available";
         }
     }
 }

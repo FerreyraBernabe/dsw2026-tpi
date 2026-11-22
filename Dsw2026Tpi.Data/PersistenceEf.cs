@@ -1,12 +1,11 @@
-﻿using Dsw2026Tpi.Data.Extensions;
-using Dsw2026Tpi.Domain.Entities;
+﻿using Dsw2026Tpi.Domain.Entities;
 using Dsw2026Tpi.Domain.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using System.Linq.Expressions;
 
 namespace Dsw2026Tpi.Data;
 
-public class PersistenceEf: IPersistence
+public class PersistenceEf : IPersistence
 {
     private readonly Dsw2026TpiDbContext _context;
 
@@ -20,17 +19,19 @@ public class PersistenceEf: IPersistence
         await _context.AddRangeAsync(entity);
         await _context.SaveChangesAsync();
         return entity;
-    } 
-    public async Task<T> Add<T>(T entity) where T : EntityBase  
+    }
+
+    public async Task<T> Add<T>(T entity) where T : EntityBase
     {
         await _context.AddAsync(entity);
         await _context.SaveChangesAsync();
         return entity;
-    }   
+    }
 
     public async Task<T> Delete<T>(T entity) where T : EntityBase
     {
         entity.Delete();
+        entity.UpdatedAt = DateTime.UtcNow;
         _context.Update(entity);
         await _context.SaveChangesAsync();
         return entity;
@@ -58,69 +59,43 @@ public class PersistenceEf: IPersistence
 
     public async Task<T> Update<T>(T entity) where T : EntityBase
     {
+        entity.UpdatedAt = DateTime.UtcNow;
         _context.Update(entity);
         await _context.SaveChangesAsync();
         return entity;
     }
+
     public async Task<List<T>> UpdateRange<T>(List<T> entities) where T : EntityBase
     {
-        foreach (var entity in entities) 
+        foreach (var entity in entities)
         {
-            if (_context.Entry(entity).State == EntityState.Detached) 
+            entity.UpdatedAt = DateTime.UtcNow;
+            if (_context.Entry(entity).State == EntityState.Detached)
             {
                 _context.Update(entity);
             }
-        }       
+        }
         await _context.SaveChangesAsync();
         return entities;
     }
 
     public async Task<Pagination<T>> Paginate<T, TKey>(int pageSize, int pageIndex, Expression<Func<T, bool>> predicate, Expression<Func<T, TKey>> sortOrder, params string[] includes) where T : EntityBase
     {
-        pageSize = Math.Abs(pageSize);
-        pageIndex = Math.Abs(pageIndex) == 0 ? 0 : Math.Abs(pageIndex) - 1;
+        var normalizedPageSize = pageSize <= 0 ? 10 : pageSize;
+        var normalizedPageIndex = pageIndex <= 0 ? 1 : pageIndex;
+        var skip = (normalizedPageIndex - 1) * normalizedPageSize;
 
         var filtered = Include(_context.Set<T>(), includes)
                  .Where(predicate)
                  .OrderBy(sortOrder);
-        
+
         var total = await filtered.CountAsync();
 
-        
-        async Task<Pagination<T>> GetPage(int skip, int take)
-        {
-            var data = await filtered.Skip(skip)
-                    .Take(take)
-                    .ToListAsync();
+        var data = skip >= total
+            ? []
+            : await filtered.Skip(skip).Take(normalizedPageSize).ToListAsync();
 
-            return new Pagination<T>(pageSize, pageIndex, data,total);
-        }
-        
-        //la pagina existe
-        if (total > pageSize * pageIndex)
-        {
-            return await GetPage(pageIndex * pageSize, pageSize);
-        }
-
-        //solo hay una pagina
-        if (total < pageSize)
-        {
-            return new Pagination<T>(pageSize, pageIndex, await filtered.ToListAsync(),total);
-        }
-
-        var targetPageIndex = pageIndex - 1;
-
-        while (true)
-        {
-            if (total > targetPageIndex * pageSize)
-            {
-                return await GetPage(targetPageIndex * pageSize, pageSize);
-            }
-
-            targetPageIndex--;
-
-            if (targetPageIndex < 0) return new Pagination<T>(pageSize, 0, [], 0);
-        }
+        return new Pagination<T>(normalizedPageSize, normalizedPageIndex, data, total);
     }
 
     private static IQueryable<T> Include<T>(IQueryable<T> query, string[] includes) where T : EntityBase
