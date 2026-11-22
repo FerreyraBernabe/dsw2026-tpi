@@ -5,7 +5,6 @@ using Dsw2026Tpi.Application.Validation;
 using Dsw2026Tpi.CrossCutting.Exceptions;
 using Dsw2026Tpi.Domain.Entities;
 using Dsw2026Tpi.Domain.Interfaces;
-using System.Data;
 
 namespace Dsw2026Tpi.Application.Services;
 
@@ -18,97 +17,126 @@ public class DoctorService : IDoctorService
         _persistence = persistence;
     }
 
-    public async Task<Pagination<DoctorModel.Response>> GetAll(int pageSize, int pageIndex, string? name = null)
+    public async Task<Pagination<DoctorModel.Response>> GetAll(
+        int pageSize,
+        int pageIndex,
+        string? name = null,
+        Guid? specialtyId = null)
     {
-        var doctors = await _persistence.Paginate<Doctor, string>(pageSize, pageIndex, d => string.IsNullOrWhiteSpace(name) && !d.Deleted ||
-                                                   d.Name.Contains(name) && !d.Deleted, x => x.Name, nameof(Doctor.Speciality),  "AvailabilityRules", "AvailabilityRules.Slots");
+        DoctorValidator.ValidateNameFilter(name);
+        var filterName = name?.Trim();
 
-        return doctors.Map(d => new DoctorModel.Response(d.Id, d.Name, d.LicenseNumber,
-            new DoctorModel.SpecialtyDto(d.Speciality?.Id, d.Speciality?.Name, d.Speciality?.IsActive ?? false),d.AvailabilityStatus()));
+        var doctors = await _persistence.Paginate<Doctor, string>(
+            pageSize,
+            pageIndex,
+            d => !d.Deleted &&
+                 (string.IsNullOrWhiteSpace(filterName) || d.Name.Contains(filterName)) &&
+                 (!specialtyId.HasValue || d.SpecialityId == specialtyId.Value),
+            x => x.Name,
+            nameof(Doctor.Speciality),
+            "AvailabilityRules",
+            "AvailabilityRules.Slots");
+
+        return doctors.Map(d => new DoctorModel.Response(
+            d.Id,
+            d.Name,
+            d.LicenseNumber,
+            new DoctorModel.SpecialtyDto(d.Speciality?.Id, d.Speciality?.Name, d.Speciality?.IsActive ?? false),
+            d.AvailabilityStatus()));
     }
 
-
-    //public async Task<Pagination<AvailabilityModel.DayScheduleResponse>> GetAvailabilities(Guid id, int pageSize, int pageIndex)
-    //{
-    //    var doctor = await _persistence.GetById<Doctor>(id);
-    //    if (doctor == null)
-    //    {
-    //        throw new EntityNotFoundException(nameof(Doctor));
-    //    }
-
-    //    //var slots = await _persistence.Paginate<AvailabilitySlot, DateOnly>(pageSize, pageIndex,
-    //    //                                                           s => s.Availability.DoctorId == id && s.Status == 0 && s.Date >= DateOnly.FromDateTime(DateTime.Now), s => s.Date);
-
-    //    var rules= await _persistence.Paginate<Availability, byte>(pageSize, pageIndex,
-    //                                                               r => r.DoctorId == id, r => r.DayOfWeek);
-    //    return rules.Map(r => new AvailabilityModel.Response(r.DoctorId, new List<AvailabilityModel.DaySchedule>))
-    //}
-
-    public async Task<List<AvailabilityModel.ResponseAvailabilities>> GetAvailabilities(Guid doctorId) 
+    public async Task<List<AvailabilityModel.DayScheduleResponse>> GetAvailabilities(Guid doctorId)
     {
-        var doctor = await _persistence.GetById<Doctor>(doctorId, "AvailabilityRules");
+        var doctor = await _persistence.GetById<Doctor>(doctorId);
         if (doctor == null)
         {
             throw new EntityNotFoundException(nameof(Doctor));
         }
 
-        var rules = doctor.AvailabilityRules.Select(r => new AvailabilityModel.ResponseAvailabilities(r.Id, r.DayOfWeek.ToSpanishDayOfWeek().ToString(), r.StartTime, r.EndTime));
-        return rules.ToList();
+        var now = DateOnly.FromDateTime(DateTime.Now);
+        var rules = await _persistence.GetFiltered<Availability>(
+            a => a.DoctorId == doctorId &&
+                 !a.Deleted &&
+                 a.Year == now.Year &&
+                 a.Month == now.Month);
+
+        if (rules == null)
+        {
+            return [];
+        }
+
+        return rules
+            .OrderBy(a => a.DayOfWeek)
+            .Select(a => new AvailabilityModel.DayScheduleResponse(
+                a.Id,
+                ((DayOfWeek)a.DayOfWeek).ToSpanishDayName(),
+                a.StartTime,
+                a.EndTime))
+            .ToList();
     }
-    //TODO: este método es nuevo y tiene más sentido que use la paginación
-    public async Task<List<AvailabilityModel.ResponseSlots>> GetSlots(Guid id, string? day = null) 
+
+    public async Task<IEnumerable<AvailabilityModel.SlotResponse>> GetAvailableSlots(
+        Guid id,
+        DateOnly? from = null,
+        DateOnly? to = null)
     {
-        var doctor = await _persistence.GetById<Doctor>(id, "AvailabilityRules", "AvailabilityRules.Slots");
-        if (doctor is null) 
+        var doctor = await _persistence.GetById<Doctor>(id);
+        if (doctor == null)
         {
             throw new EntityNotFoundException(nameof(Doctor));
         }
-        var rules = doctor.AvailabilityRules.AsEnumerable();
-        if (rules is null) 
+
+        var now = DateTime.Now;
+        var today = DateOnly.FromDateTime(now);
+        var currentTime = TimeOnly.FromDateTime(now);
+        var effectiveFrom = from.HasValue && from.Value > today ? from.Value : today;
+
+        var slots = await _persistence.GetFiltered<AvailabilitySlot>(
+            s => s.DoctorId == id &&
+                 !s.Deleted &&
+                 s.Status == AvailabilitySlotStatus.AVAILABLE &&
+                 (s.Date > effectiveFrom || (s.Date == effectiveFrom && (effectiveFrom > today || s.StartTime > currentTime))) &&
+                 (!to.HasValue || s.Date <= to.Value));
+
+        if (slots == null)
         {
-            return new List<AvailabilityModel.ResponseSlots> 
-            { new AvailabilityModel.ResponseSlots(id, day, []) };
-        }
-        var today = DateOnly.FromDateTime(DateTime.Now);    
-        if (!string.IsNullOrWhiteSpace(day)) 
-        {
-            var targetDay = (byte)day.toDayOfWeek();
-            rules = rules.Where(rule => rule.DayOfWeek == targetDay);
+            return [];
         }
 
-        return rules.Select(rule => new AvailabilityModel.ResponseSlots(
-            doctor.Id,
-            rule.DayOfWeek.ToSpanishDayOfWeek(),
-            rule.Slots.Where(s => s.Status == AvailabilitySlotStatus.AVAILABLE && s.Date >= today)
+        return slots
             .OrderBy(s => s.Date)
             .ThenBy(s => s.StartTime)
-            .Select(s => new AvailabilityModel.Slots(
+            .Select(s => new AvailabilityModel.SlotResponse(
                 s.Id,
-                s.Date.ToString("dd/MM/yyyy"),
-                s.StartTime, 
-                s.EndTime))
-            .ToList()))
-            .ToList();
+                s.Date,
+                s.StartTime,
+                s.EndTime,
+                s.Status.ToString()));
     }
+
     public async Task<DoctorModel.Response> CreateDoctor(DoctorModel.Request request)
     {
         DoctorValidator.Validate(request);
         var specialty = await _persistence.GetById<Specialty>(request.SpecialtyId);
-        if(specialty == null)
+        if (specialty == null)
         {
             throw new EntityNotFoundException(nameof(Specialty));
         }
 
-        var doctor = new Doctor(request.Name, request.LicenseNumber, request.SpecialtyId);
+        var doctor = new Doctor(request.Name.Trim(), request.LicenseNumber?.Trim() ?? string.Empty, request.SpecialtyId);
         await _persistence.Add(doctor);
 
-        return new DoctorModel.Response(doctor.Id, doctor.Name, doctor.LicenseNumber,
-            new DoctorModel.SpecialtyDto(specialty.Id, specialty.Name, specialty.IsActive), "No definidas");
+        return new DoctorModel.Response(
+            doctor.Id,
+            doctor.Name,
+            doctor.LicenseNumber,
+            new DoctorModel.SpecialtyDto(specialty.Id, specialty.Name, specialty.IsActive),
+            "Not Available");
     }
-
 
     public async Task<DoctorModel.Response> UpdateDoctor(Guid id, DoctorModel.Request request)
     {
+        DoctorValidator.Validate(request);
         var specialty = await _persistence.GetById<Specialty>(request.SpecialtyId);
         if (specialty == null)
         {
@@ -120,12 +148,16 @@ public class DoctorService : IDoctorService
         {
             throw new EntityNotFoundException(nameof(Doctor));
         }
-        DoctorValidator.Validate(request);
-        doctor.Update(request.Name, request.LicenseNumber, request.SpecialtyId);
+
+        doctor.Update(request.Name.Trim(), request.LicenseNumber?.Trim() ?? string.Empty, request.SpecialtyId);
         await _persistence.Update(doctor);
 
-        return new DoctorModel.Response(doctor.Id, doctor.Name, doctor.LicenseNumber,
-            new DoctorModel.SpecialtyDto(specialty.Id, specialty.Name, specialty.IsActive), doctor.AvailabilityStatus());
+        return new DoctorModel.Response(
+            doctor.Id,
+            doctor.Name,
+            doctor.LicenseNumber,
+            new DoctorModel.SpecialtyDto(specialty.Id, specialty.Name, specialty.IsActive),
+            doctor.AvailabilityStatus());
     }
 
     public async Task DeleteDoctor(Guid id)
@@ -135,6 +167,7 @@ public class DoctorService : IDoctorService
         {
             throw new EntityNotFoundException(nameof(Doctor));
         }
+
         doctor.Delete();
         await _persistence.Update(doctor);
     }
@@ -146,6 +179,7 @@ public class DoctorService : IDoctorService
         {
             throw new EntityNotFoundException(nameof(Doctor));
         }
+
         doctor.Activate();
         await _persistence.Update(doctor);
     }
