@@ -23,50 +23,60 @@ public class ExceptionHandlingMiddleware
         {
             await _next(context);
         }
-  
         catch (ValidationException ex)
         {
-            _logger.LogError(ex, "Se produjo un error de validación de datos.");
+            _logger.LogWarning(ex, "Se produjo un error de validación de datos.");
+            await HandleExceptionAsync(context, ex);
+        }
+        catch (BusinessRuleException ex)
+        {
+            _logger.LogWarning(ex, "Se produjo una violación de regla de negocio.");
             await HandleExceptionAsync(context, ex);
         }
         catch (EntityNotFoundException ex)
         {
-            _logger.LogError(ex, "No se encontró la entidad especificada.");
+            _logger.LogWarning(ex, "No se encontró la entidad especificada.");
             await HandleExceptionAsync(context, ex);
         }
         catch (ConflictException ex)
         {
-            _logger.LogError(ex, "Se produjo un conflicto en la solicitud.");
+            _logger.LogWarning(ex, "Se produjo un conflicto en la solicitud.");
+            await HandleExceptionAsync(context, ex);
+        }
+        catch (AuthenticationException ex)
+        {
+            _logger.LogWarning(ex, "Fallo de autenticación en la solicitud.");
             await HandleExceptionAsync(context, ex);
         }
         catch (AuthorizationException ex)
         {
-            _logger.LogError(ex, "Se produjo un error de autorización.");
+            _logger.LogWarning(ex, "Se produjo un error de autorización.");
             await HandleExceptionAsync(context, ex);
         }
-
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Se produjo un error durante el procesamiento de la solicitud");
+            _logger.LogError(ex, "Se produjo un error inesperado durante el procesamiento de la solicitud.");
             await HandleExceptionAsync(context, ex);
         }
     }
 
     private async Task HandleExceptionAsync(HttpContext context, Exception ex)
     {
-        ErrorResponse error = ex is AppException exApp ? 
-            exApp.Error : 
+        ErrorResponse error = ex is AppException exApp ?
+            exApp.Error :
             new ErrorResponse(nameof(ErrorCodes.UNHANDLED_ERROR), ErrorCodes.UNHANDLED_ERROR);
+
         var status = ex switch
         {
-            //TODO: mapear authenticationException a un 400 o a un 401.
             ValidationException => HttpStatusCode.BadRequest,
+            BusinessRuleException => HttpStatusCode.UnprocessableEntity,
             EntityNotFoundException => HttpStatusCode.NotFound,
-            ConflictException or AuthenticationException => HttpStatusCode.Conflict,
-            AuthorizationException => HttpStatusCode.Unauthorized,
+            ConflictException => HttpStatusCode.Conflict,
+            AuthenticationException or AuthorizationException => HttpStatusCode.Unauthorized,
             _ => HttpStatusCode.InternalServerError,
         };
-        var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }; 
+
+        var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
         var result = JsonSerializer.Serialize(error, options);
         context.Response.ContentType = "application/json";
         context.Response.StatusCode = (int)status;

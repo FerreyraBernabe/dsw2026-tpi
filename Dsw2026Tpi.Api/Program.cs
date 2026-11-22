@@ -1,7 +1,8 @@
 using Dsw2026Tpi.Api.Configurations;
 using Dsw2026Tpi.Api.Middlewares;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Dsw2026Tpi.CrossCutting.Models;
+using Dsw2026Tpi.CrossCutting.Resources;
+using Microsoft.AspNetCore.Mvc;
 using Serilog;
 
 namespace Dsw2026Tpi.Api;
@@ -10,7 +11,6 @@ public class Program
 {
     public static async Task Main(string[] args)
     {
-        // Inicializar con un logger simple antes de construir el host
         Log.Logger = new LoggerConfiguration()
             .WriteTo.Console()
             .CreateBootstrapLogger();
@@ -21,7 +21,6 @@ public class Program
 
             var builder = WebApplication.CreateBuilder(args);
 
-            //Configuraciones personalizadas
             builder.AddSerilogConfiguration();
             builder.Services.AddAppIdentity();
             builder.Services.AddAppAuthentication(builder.Configuration);
@@ -30,7 +29,21 @@ public class Program
             builder.Services.AddAppCors(builder.Configuration);
             builder.Services.AddAppDependencies();
             builder.Services.AddCustomRateLimiting(builder.Configuration);
-            builder.Services.AddControllers();
+            builder.Services.AddControllers()
+                .ConfigureApiBehaviorOptions(options =>
+                {
+                    options.InvalidModelStateResponseFactory = context =>
+                    {
+                        var error = new ErrorResponse(nameof(ErrorCodes.VALIDATION_ERROR), ErrorCodes.VALIDATION_ERROR);
+                        var details = context.ModelState
+                            .Where(entry => entry.Value?.Errors.Count > 0)
+                            .SelectMany(entry => entry.Value!.Errors.Select(err => (
+                                string.IsNullOrWhiteSpace(entry.Key) ? "request" : entry.Key,
+                                string.IsNullOrWhiteSpace(err.ErrorMessage) ? "Formato de dato inválido." : err.ErrorMessage)));
+                        error.AddDetail(details);
+                        return new BadRequestObjectResult(error);
+                    };
+                });
             builder.Services.AddHealthChecks();
 
             var app = builder.Build();
@@ -45,11 +58,11 @@ public class Program
             {
                 app.UseSwagger();
                 app.UseSwaggerUI();
-                if (app.Configuration.GetValue<bool>("ResetBdOnStart")) 
+                if (app.Configuration.GetValue<bool>("ResetBdOnStart"))
                 {
-                    app.ResetDbOnStart();//TODO: Borrar cuando se acaben las pruebas.
-                    await app.SeedAdminAsync();
-                } 
+                    app.ResetDbOnStart();
+                }
+                await app.SeedAdminAsync();
             }
             app.UseRouting();
             app.UseCors();
@@ -57,7 +70,6 @@ public class Program
             app.UseAuthentication();
             app.UseAuthorization();
             app.UseRateLimiter();
-           
 
             app.MapControllers();
             app.MapHealthChecks("/health-check");
@@ -87,4 +99,3 @@ public class Program
         }
     }
 }
-
