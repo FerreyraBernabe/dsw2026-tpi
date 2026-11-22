@@ -25,17 +25,26 @@ public class DoctorController : AppController
     }
 
     [HttpGet("{id}/availabilities")]
-    public async Task<IActionResult> GetAvailabilities([FromRoute] Guid id, [FromQuery] int pageSize = 10, [FromQuery] int pageIndex = 0)
+    public async Task<IActionResult> GetAvailabilities([FromRoute] Guid id) 
     {
-        var availabilities = await _service.GetAvailabilities(id, pageSize, pageIndex);
-        return Ok(availabilities);
+        var rules = await _service.GetAvailabilities(id);
+        return Ok(rules);
+    }
+    //public async Task<IActionResult> GetAvailabilities([FromRoute] Guid id, [FromQuery] int pageSize = 10, [FromQuery] int pageIndex = 0)
+    //{
+    //    var availabilities = await _service.GetAvailabilities(id, pageSize, pageIndex);
+    //    return Ok(availabilities);
+    //}
+    [HttpGet("{id}/slots")]
+    public async Task<IActionResult> GetSlots([FromRoute] Guid id, [FromQuery] string? day = null)
+    {
+        var slots = await _service.GetSlots(id, day);
+        return Ok(slots);
     }
 
 
     [HttpPost]
     [Authorize(Policy = Policies.AdminPolicy)]
-    [HttpPost] 
-    [AllowAnonymous]
     public async Task<IActionResult> CreateDoctor(DoctorModel.Request request)
     {
         var doctor = await _service.CreateDoctor(request);

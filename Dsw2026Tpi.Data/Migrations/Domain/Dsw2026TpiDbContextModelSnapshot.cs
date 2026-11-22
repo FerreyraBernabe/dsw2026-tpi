@@ -61,7 +61,8 @@ namespace Dsw2026Tpi.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AvailabilitySlotId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("[Status] = 0");
 
                     b.HasIndex("PatientId");
 

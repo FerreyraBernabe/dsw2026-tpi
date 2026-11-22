@@ -19,7 +19,7 @@ public class DoctorValidator
             errores.Add( ("Name","El nombre no puede ser nulo o vacío.") );
         }
         
-        if (request.SpecialityId == Guid.Empty)
+        if (request.SpecialtyId == Guid.Empty)
         {
             errores.Add( ("SpecialityId","El ID de la especialidad no puede estar vacío.") );
         }
