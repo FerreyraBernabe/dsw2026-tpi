@@ -58,6 +58,7 @@ namespace Dsw2026Tpi.Application.Services
             return specialties.Map(s => new SpecialtyModel.FilterResponse(
                 s.Id,
                 s.Name,
+                s.IsActive,
                 s.Description));
         }
 
