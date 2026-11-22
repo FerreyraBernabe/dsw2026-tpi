@@ -57,7 +57,7 @@ public class AppointmentService : IAppointmentService
                 new AppointmentModel.SpecialtyDto(doctor.Speciality.Id, doctor.Speciality.Name))
         );
     }
-    public async Task<IEnumerable<AppointmentModel.Response>> GetPatientAppointmentsAsync(string dni)
+    public async Task<IEnumerable<AppointmentModel.PatientResponse>> GetPatientAppointmentsAsync(string dni)
     {
         var patient = await _persistence.First<Patient>(p => p.Dni.Equals(dni));
         if (patient == null)
@@ -65,18 +65,21 @@ public class AppointmentService : IAppointmentService
             throw new EntityNotFoundException(dni);
         }
 
-        List<AppointmentModel.Response> result = [];
+        List<AppointmentModel.PatientResponse> result = [];
         var appointments = await _persistence.GetFiltered<Appointment>((a => a.PatientId == patient.Id && a.Status == AppointmentStatus.BOOKED),
             "Patient", "AvailabilitySlot", "AvailabilitySlot.Availability", "AvailabilitySlot.Availability.Doctor", "AvailabilitySlot.Availability.Doctor.Speciality");
 
         foreach (var a in appointments)
         {
-            result.Add(new AppointmentModel.Response
-            (
-                a.Id, a.Status.ToString(), a.AvailabilitySlot.Date,
-                new AppointmentModel.PatientDto(a.Patient.Dni, a.Patient.Name),
-                new AppointmentModel.DoctorDto(a.AvailabilitySlot.DoctorId, a.AvailabilitySlot.Availability.Doctor.Name,
-                    new AppointmentModel.SpecialtyDto(a.AvailabilitySlot.Availability.Doctor.SpecialityId, a.AvailabilitySlot.Availability.Doctor.Speciality.Name))
+            result.Add(new AppointmentModel.PatientResponse
+            (a.Id, 
+            a.AvailabilitySlot.DoctorId,
+            a.AvailabilitySlot.Availability.Doctor.Name,
+            a.AvailabilitySlot.Availability.Doctor.Speciality.Name, 
+            a.AvailabilitySlot.Date, 
+            a.AvailabilitySlot.StartTime, 
+            a.Reason, 
+            a.Status.ToString()
             ));
         }
 
@@ -96,10 +99,6 @@ public class AppointmentService : IAppointmentService
     {
         var appointments = await _persistence.GetFiltered<Appointment>(a => a.AvailabilitySlot.Date == date, "Patient", "AvailabilitySlot"
             , "AvailabilitySlot.Availability", "AvailabilitySlot.Availability.Doctor", "AvailabilitySlot.Availability.Doctor.Speciality");
-        if (!appointments.Any())
-        {
-            throw new EntityNotFoundException(nameof(Appointment));
-        }
         var response = new List<AppointmentModel.Response>();
         foreach (var a in appointments)
         {
