@@ -14,10 +14,8 @@ public static class PersistenceConfigurationExtensions
     public static IServiceCollection AddApplicationPersistence(this IServiceCollection services,
         IConfiguration configuration)
     {
-        //Obtener cadena de conexión desde appsettings.json
         var connectionString = configuration.GetConnectionString("DefaultConnection");
 
-        //Agregar contexto (O/RM) y utilizar SQL Server para DB
         services.AddDbContext<Dsw2026TpiDbContext>(options =>
         {
             options.UseSqlServer(connectionString);
@@ -30,7 +28,7 @@ public static class PersistenceConfigurationExtensions
 
         services.AddDbContext<AuthenticationDbContext>(options =>
         {
-            options.UseSqlServer(connectionString, 
+            options.UseSqlServer(connectionString,
                 config => config.MigrationsHistoryTable("__EFMigrationsHistory_Auth"));
             options.UseSeeding((c, t) =>
             {
@@ -39,7 +37,8 @@ public static class PersistenceConfigurationExtensions
         });
         return services;
     }
-    public static WebApplication ResetDbOnStart(this WebApplication app) 
+
+    public static WebApplication ResetDbOnStart(this WebApplication app)
     {
         using var scope = app.Services.CreateScope();
         var provider = scope.ServiceProvider;
@@ -51,6 +50,7 @@ public static class PersistenceConfigurationExtensions
         authContext.Database.Migrate();
         return app;
     }
+
     public static async Task<WebApplication> SeedAdminAsync(this WebApplication app)
     {
         using var scope = app.Services.CreateScope();
@@ -59,12 +59,19 @@ public static class PersistenceConfigurationExtensions
         var email = app.Configuration.GetValue<string>("AdminEmail");
         var pass = app.Configuration.GetValue<string>("Password");
 
-        if (email == null || pass == null) 
+        if (email == null || pass == null)
         {
             throw new InvalidOperationException("No se encontró los datos de usuario del Administrador en el archivo de configuración.");
         }
-        var authService = scope.ServiceProvider.GetRequiredService<IAuthenticationService>(); 
-        await authService.Register(new RegisterModel.Request(email,pass));
+
+        var existingAdmin = await userManager.FindByEmailAsync(email);
+        if (existingAdmin != null)
+        {
+            return app;
+        }
+
+        var authService = scope.ServiceProvider.GetRequiredService<IAuthenticationService>();
+        await authService.Register(new RegisterModel.Request(email, pass));
 
         return app;
     }

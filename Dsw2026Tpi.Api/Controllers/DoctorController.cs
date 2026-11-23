@@ -18,37 +18,39 @@ public class DoctorController : AppController
 
     [HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetAll([FromQuery]int pageSize = 10, [FromQuery]int pageIndex = 0, [FromQuery]string? name = null)
+    public async Task<IActionResult> GetAll(
+        [FromQuery] int pageSize = 10,
+        [FromQuery] int pageIndex = 1,
+        [FromQuery] string? name = null,
+        [FromQuery] Guid? specialtyId = null)
     {
-        var doctors = await _service.GetAll(pageSize, pageIndex, name);
+        var doctors = await _service.GetAll(pageSize, pageIndex, name, specialtyId);
         return Ok(doctors);
     }
 
     [HttpGet("{id}/availabilities")]
-    public async Task<IActionResult> GetAvailabilities([FromRoute] Guid id) 
+    public async Task<IActionResult> GetAvailabilities([FromRoute] Guid id)
     {
         var rules = await _service.GetAvailabilities(id);
         return Ok(rules);
     }
-    //public async Task<IActionResult> GetAvailabilities([FromRoute] Guid id, [FromQuery] int pageSize = 10, [FromQuery] int pageIndex = 0)
-    //{
-    //    var availabilities = await _service.GetAvailabilities(id, pageSize, pageIndex);
-    //    return Ok(availabilities);
-    //}
+
     [HttpGet("{id}/slots")]
-    public async Task<IActionResult> GetSlots([FromRoute] Guid id, [FromQuery] string? day = null)
+    public async Task<IActionResult> GetAvailableSlots(
+        [FromRoute] Guid id,
+        [FromQuery] DateOnly? from = null,
+        [FromQuery] DateOnly? to = null)
     {
-        var slots = await _service.GetSlots(id, day);
+        var slots = await _service.GetAvailableSlots(id, from, to);
         return Ok(slots);
     }
-
 
     [HttpPost]
     [Authorize(Policy = Policies.AdminPolicy)]
     public async Task<IActionResult> CreateDoctor(DoctorModel.Request request)
     {
         var doctor = await _service.CreateDoctor(request);
-        return Ok(doctor); 
+        return Ok(doctor);
     }
 
     [HttpPut("{id}")]
@@ -64,7 +66,7 @@ public class DoctorController : AppController
     public async Task<IActionResult> DeleteDoctor([FromRoute] Guid id)
     {
         await _service.DeleteDoctor(id);
-        return Ok("ok"); 
+        return Ok("ok");
     }
 
     [HttpPut("activate")]

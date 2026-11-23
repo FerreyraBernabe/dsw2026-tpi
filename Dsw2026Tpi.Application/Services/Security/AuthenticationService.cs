@@ -39,9 +39,32 @@ public class AuthenticationService : IAuthenticationService
 
     public async Task<LoginAdminModel.Response> LoginAdmin(LoginAdminModel.Request request)
     {
-        if (!request.Email.IsEmailValid()) throw new ValidationException();
-        var user = await _userManager.FindByEmailAsync(request.Email) ?? throw new AuthenticationException();
-        //TODO: validar contraseña antes de enviarla
+        var errores = new List<(string, string)>();
+
+        if (request == null)
+        {
+            errores.Add(("request", "Los datos de inicio de sesión son obligatorios."));
+        }
+        else
+        {
+            if (!request.Email.IsEmailValid())
+            {
+                errores.Add(("email", "El formato del correo electrónico no es válido."));
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 8)
+            {
+                errores.Add(("password", "La contraseña es obligatoria y debe tener al menos 8 caracteres."));
+            }
+        }
+
+        if (errores.Any())
+        {
+            throw new ValidationException(ErrorCodes.LOGIN_USER_INVALID, nameof(ErrorCodes.LOGIN_USER_INVALID))
+                .WithDetail(errores);
+        }
+
+        var user = await _userManager.FindByEmailAsync(request!.Email) ?? throw new AuthenticationException();
         var result = await _signInManager.CheckPassword(user, request.Password);
 
         if (!result)
@@ -50,26 +73,37 @@ public class AuthenticationService : IAuthenticationService
             throw new AuthenticationException();
         }
 
-        var role = (await _userManager.GetRolesAsync(user)).FirstOrDefault(); 
+        var role = (await _userManager.GetRolesAsync(user)).FirstOrDefault();
 
-        var token = _jwtService.GenerateToken(user.UserName!, role);
+        if (!string.Equals(role, Roles.Administrator, StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogWarning("Intento de login admin con rol inválido para: {Email}", request.Email);
+            throw new AuthenticationException();
+        }
+
+        var token = _jwtService.GenerateToken(user.UserName!, Roles.Administrator);
 
         return new LoginAdminModel.Response(
             token,
-            role
+            Roles.Administrator
         );
     }
 
     public async Task<LoginPatientModel.Response> LoginPatient(LoginPatientModel.Request request)
     {
+        if (request == null)
+        {
+            throw new ValidationException(ErrorCodes.LOGIN_USER_INVALID, nameof(ErrorCodes.LOGIN_USER_INVALID));
+        }
+
         string dniStr = request.Dni.ToString();
 
         if (!request.Email.IsEmailValid() || !dniStr.IsDniValid())
         {
             throw new ValidationException(ErrorCodes.LOGIN_USER_INVALID,
-            nameof(ErrorCodes.LOGIN_USER_INVALID)); //TODO: POR QUE HAY DOS???
-            throw new ValidationException(ErrorCodes.REGISTER_USER_INVALID, nameof(ErrorCodes.REGISTER_USER_INVALID));
+                nameof(ErrorCodes.LOGIN_USER_INVALID));
         }
+
         var patient = await _persistence.First<Patient>(p => p.Dni == dniStr);
 
         if (patient == null)
@@ -104,7 +138,6 @@ public class AuthenticationService : IAuthenticationService
                 _logger.LogWarning("El Email no coincide con el DNI proporcionado: {Email}", request.Email);
                 throw new AuthenticationException();
             }
-            
         }
 
         var token = _jwtService.GenerateToken(dniStr, Roles.Patient);
@@ -113,8 +146,10 @@ public class AuthenticationService : IAuthenticationService
 
     public async Task<RegisterModel.Response> Register(RegisterModel.Request request)
     {
-        if (!request.Email.IsEmailValid()) throw new ValidationException(ErrorCodes.REGISTER_USER_INVALID,
-            nameof(ErrorCodes.REGISTER_USER_INVALID));
+        if (!request.Email.IsEmailValid())
+        {
+            throw new ValidationException(ErrorCodes.REGISTER_USER_INVALID, nameof(ErrorCodes.REGISTER_USER_INVALID));
+        }
 
         var user = new ApplicationUser
         {
@@ -126,9 +161,12 @@ public class AuthenticationService : IAuthenticationService
 
         var result = await _userManager.CreateAsync(user, request.Password);
 
-        if (!result.Succeeded) throw new ConflictException(nameof(ErrorCodes.REGISTER_USER_CONFLICT),
-            ErrorCodes.REGISTER_USER_CONFLICT)
-                .WithDetail(result.Errors.Select(e => (e.Code, e.Description)));
+        if (!result.Succeeded)
+        {
+            throw new ConflictException(nameof(ErrorCodes.REGISTER_USER_CONFLICT),
+                ErrorCodes.REGISTER_USER_CONFLICT)
+                    .WithDetail(result.Errors.Select(e => (e.Code, e.Description)));
+        }
 
         _ = await _userManager.AddToRoleAsync(user, Roles.Administrator);
 

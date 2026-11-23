@@ -1,7 +1,5 @@
 ﻿using Dsw2026Tpi.Application.Dtos;
 using Dsw2026Tpi.Application.Interfaces;
-using Dsw2026Tpi.Application.Services;
-using Dsw2026Tpi.CrossCutting.Exceptions;
 using Dsw2026Tpi.CrossCutting.Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -19,17 +17,16 @@ public class AppointmentController : AppController
         _service = service;
     }
 
-   [HttpPost]
-   [EnableRateLimiting("BookingPolicy")]
+    [HttpPost]
+    [EnableRateLimiting("BookingPolicy")]
     public async Task<IActionResult> CreateAppointment([FromBody] AppointmentModel.Request request)
     {
         var response = await _service.CreateAppointment(request);
         return Ok(response);
     }
 
-
     [HttpGet("patient")]
-    public async Task<IActionResult> GetPatientAppointments([FromQuery] long dni)
+    public async Task<IActionResult> GetPatientAppointments([FromQuery] string dni)
     {
         var result = await _service.GetPatientAppointmentsAsync(dni);
         return Ok(result);
@@ -38,10 +35,9 @@ public class AppointmentController : AppController
     [HttpDelete("{id}")]
     public async Task<IActionResult> CancelAppointment([FromRoute] Guid id)
     {
-      await _service.CancelAppointmentAsync(id);
-      return Ok("ok");
+        await _service.CancelAppointmentAsync(id);
+        return Ok("ok");
     }
-
 
     [HttpGet]
     [Authorize(Policy = Policies.AdminPolicy)]
@@ -51,12 +47,17 @@ public class AppointmentController : AppController
         return Ok(result);
     }
 
-
     [HttpGet("search")]
     [Authorize(Policy = Policies.AdminPolicy)]
-    public async Task<IActionResult> SearchAppointments([FromQuery] Guid? specialtyId,[FromQuery] Guid? doctorId,[FromQuery] string? dni, [FromQuery] DateOnly? date, [FromQuery] int pageSize = 10, [FromQuery] int pageIndex = 0)
+    public async Task<IActionResult> SearchAppointments(
+        [FromQuery] Guid? specialtyId,
+        [FromQuery] Guid? doctorId,
+        [FromQuery] string? dni,
+        [FromQuery] DateOnly? date,
+        [FromQuery] int pageSize = 10,
+        [FromQuery] int pageIndex = 1)
     {
-        var result = await _service.CombinedSearch(pageSize,pageIndex,specialtyId, doctorId, dni, date);
+        var result = await _service.CombinedSearch(pageSize, pageIndex, specialtyId, doctorId, dni, date);
         return Ok(result);
     }
 }

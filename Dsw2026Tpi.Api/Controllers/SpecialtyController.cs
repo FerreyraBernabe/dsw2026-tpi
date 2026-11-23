@@ -7,17 +7,20 @@ using Microsoft.AspNetCore.Mvc;
 namespace Dsw2026Tpi.Api.Controllers;
 
 [Route("api/specialties")]
-[Authorize]
 public class SpecialtyController : AppController
 {
     private readonly ISpecialtyService _service;
+
     public SpecialtyController(ISpecialtyService service)
     {
         _service = service;
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetSpecialtyByName([FromQuery] int pageSize = 10, [FromQuery] int pageIndex = 0, [FromQuery] string? name = null)
+    public async Task<IActionResult> GetSpecialtyByName(
+        [FromQuery] int pageSize = 10,
+        [FromQuery] int pageIndex = 1,
+        [FromQuery] string? name = null)
     {
         return Ok(await _service.FilterSpecialtyByName(pageSize, pageIndex, name));
     }
@@ -41,7 +44,7 @@ public class SpecialtyController : AppController
     public async Task<IActionResult> DeleteSpecialty([FromRoute] Guid id)
     {
         await _service.DeleteSpecialty(id);
-        return Ok("Ok");
+        return Ok("ok");
     }
 
     [HttpPut("activate")]
@@ -51,5 +54,4 @@ public class SpecialtyController : AppController
         await _service.ReactivateSpecialty(id);
         return Ok();
     }
-
 }

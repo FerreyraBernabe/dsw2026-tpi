@@ -5,12 +5,18 @@ namespace Dsw2026Tpi.Application.Interfaces;
 
 public interface IDoctorService
 {
-    Task<Pagination<DoctorModel.Response>> GetAll(int pageSize, int pageIndex, string? name = null);
+    Task<Pagination<DoctorModel.Response>> GetAll(
+        int pageSize,
+        int pageIndex,
+        string? name = null,
+        Guid? specialtyId = null);
     Task<DoctorModel.Response> CreateDoctor(DoctorModel.Request request);
     Task<DoctorModel.Response> UpdateDoctor(Guid id, DoctorModel.Request request);
     Task DeleteDoctor(Guid id);
     Task ReactivateDoctor(Guid id);
-    //Task<Pagination<AvailabilityModel.DayScheduleResponse>> GetAvailabilities(Guid id, int pageSize, int pageIndex);
-    Task<List<AvailabilityModel.ResponseAvailabilities>> GetAvailabilities(Guid doctorId);
-    Task<List<AvailabilityModel.ResponseSlots>> GetSlots(Guid id, string? day = null);
+    Task<List<AvailabilityModel.DayScheduleResponse>> GetAvailabilities(Guid doctorId);
+    Task<IEnumerable<AvailabilityModel.SlotResponse>> GetAvailableSlots(
+        Guid id,
+        DateOnly? from = null,
+        DateOnly? to = null);
 }
